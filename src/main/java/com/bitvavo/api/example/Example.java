@@ -1,11 +1,13 @@
 package com.bitvavo.api.example;
 
-import com.bitvavo.api.*;
-import org.json.*;
-import java.util.*;
+import org.json.JSONArray;
+import org.json.JSONObject;
+
+import com.bitvavo.api.Bitvavo;
+import com.bitvavo.api.WebsocketClientEndpoint;
 
 /*
- * This is an example utilising all functions of the node Bitvavo API wrapper.
+ * This is an example utilizing all functions of the node Bitvavo API wrapper.
  * The APIKEY and APISECRET should be replaced by your own key and secret.
  * For public functions the APIKEY and SECRET can be removed.
  * Documentation: https://docs.bitvavo.com
@@ -13,9 +15,9 @@ import java.util.*;
  * README: https://github.com/bitvavo/java-bitvavo-api
  */
 
-class example{
-  public static void main(String args[]){
-    Bitvavo bitvavo = new Bitvavo(new JSONObject("{" + 
+class Example{
+  public static void main(String[] args){
+    Bitvavo bitvavo = new Bitvavo(new JSONObject("{" +
         "APIKEY: '<APIKEY>', " +
         "APISECRET: '<APISECRET>', " +
         "RESTURL: 'https://api.bitvavo.com/v2'," +

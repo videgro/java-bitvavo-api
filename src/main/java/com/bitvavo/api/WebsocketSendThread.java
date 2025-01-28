@@ -1,38 +1,43 @@
 package com.bitvavo.api;
 
+import java.util.Iterator;
 import java.util.concurrent.TimeUnit;
-import org.json.*;
-import java.util.*;
+
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import org.json.JSONObject;
 
 public class WebsocketSendThread extends Thread {
-  JSONObject options;
-  Bitvavo bitvavo;
-  WebsocketClientEndpoint ws;
+  private static final Logger LOGGER = LogManager.getLogger();
 
-  public WebsocketSendThread(JSONObject options, Bitvavo bitv, WebsocketClientEndpoint ws) {
+  private JSONObject options;
+  private Bitvavo bitvavo;
+  private WebsocketClientEndpoint ws;
+
+  public WebsocketSendThread(final JSONObject options,final Bitvavo bitv,final WebsocketClientEndpoint ws) {
     this.options = options;
     this.bitvavo = bitv;
     this.ws = ws;
   }
 
-  public void sendPrivate(JSONObject options) {
-    if(this.bitvavo.authenticated) {
-      Iterator<String> markets = options.keys();
+  public void sendPrivate(final JSONObject options) {
+    if (bitvavo.isAuthenticated()) {
+      final Iterator<String> markets = options.keys();
       while(markets.hasNext()) {
-        String market = markets.next();
+        final String market = markets.next();
         this.ws.sendMessage(options.get(market).toString());
       }
     } else {
       try {
         TimeUnit.MILLISECONDS.sleep(500);
         sendPrivate(options);
-      }
-      catch (Exception e) {
-        System.out.println("something went wrong while sending private request.");
+      } catch (InterruptedException e) {
+        LOGGER.error("something went wrong while sending private request.",e);
       }
     }
   }
 
+  @Override
   public void run(){
     sendPrivate(this.options);
   }

@@ -1,53 +1,68 @@
 package com.bitvavo.api;
 
-import java.net.*;
-import javax.net.ssl.*;
-import java.io.*;
-import org.json.*;
-import java.util.*;
-import java.util.Calendar;
-import java.text.SimpleDateFormat;
-import org.apache.commons.io.IOUtils;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStreamWriter;
+import java.io.StringWriter;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
+import java.security.InvalidKeyException;
+import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
+
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
+import javax.net.ssl.HttpsURLConnection;
+
 import org.apache.commons.codec.binary.Hex;
-import java.util.concurrent.TimeUnit;
-import java.text.DecimalFormat;
-import java.text.DecimalFormatSymbols;
+import org.apache.commons.io.IOUtils;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import org.json.JSONArray;
+import org.json.JSONObject;
 
 public class Bitvavo {
-  String apiKey;
-  String apiSecret;
-  String restUrl;
-  String wsUrl;
-  boolean authenticated;
-  boolean debugging = true;
-  int window;
-  WebsocketClientEndpoint ws;
-  Websocket websocketObject;
-  KeepAliveThread keepAliveThread;
-  Map<String, Object> book;
-  boolean activatedSubscriptionTicker;
-  boolean activatedSubscriptionTicker24h;
-  boolean activatedSubscriptionAccount;
-  boolean activatedSubscriptionCandles;
-  boolean activatedSubscriptionTrades;
-  boolean activatedSubscriptionBookUpdate;
-  boolean activatedSubscriptionBook;
-  JSONObject optionsSubscriptionTicker;
-  JSONObject optionsSubscriptionTicker24h;
-  JSONObject optionsSubscriptionAccount;
-  JSONObject optionsSubscriptionCandles;
-  JSONObject optionsSubscriptionTrades;
-  JSONObject optionsSubscriptionBookUpdate;
-  JSONObject optionsSubscriptionBookFirst;
-  JSONObject optionsSubscriptionBookSecond;
-  volatile int rateLimitRemaining = 1000;
-  volatile long rateLimitReset = 0;
-  volatile boolean rateLimitThreadStarted = false;
+  private static final Logger LOGGER = LogManager.getLogger();
 
-  public Bitvavo(JSONObject options) {
-    JSONArray keys = options.names();
+  private String apiKey;
+  private String apiSecret;
+  private String restUrl;
+  private String wsUrl;
+  private boolean authenticated;
+  private boolean debugging = true;
+  private int window;
+  private WebsocketClientEndpoint ws;
+  private Websocket websocketObject;
+  private KeepAliveThread keepAliveThread;
+  private Map<String, Object> book;
+  private boolean activatedSubscriptionTicker;
+  private boolean activatedSubscriptionTicker24h;
+  private boolean activatedSubscriptionAccount;
+  private boolean activatedSubscriptionCandles;
+  private boolean activatedSubscriptionTrades;
+  private boolean activatedSubscriptionBookUpdate;
+  private boolean activatedSubscriptionBook;
+  private JSONObject optionsSubscriptionTicker;
+  private JSONObject optionsSubscriptionTicker24h;
+  private JSONObject optionsSubscriptionAccount;
+  private JSONObject optionsSubscriptionCandles;
+  private JSONObject optionsSubscriptionTrades;
+  private JSONObject optionsSubscriptionBookUpdate;
+  private JSONObject optionsSubscriptionBookFirst;
+  private JSONObject optionsSubscriptionBookSecond;
+  private volatile int rateLimitRemaining = 1000;
+  private volatile long rateLimitReset = 0;
+  private volatile boolean rateLimitThreadStarted = false;
+
+  public Bitvavo(final JSONObject options) {
+    final JSONArray keys = options.names();
     boolean apiKeySet = false;
     boolean apiSecretSet = false;
     boolean windowSet = false;
@@ -55,44 +70,44 @@ public class Bitvavo {
     boolean restUrlSet = false;
     boolean wsUrlSet = false;
     for (int i = 0; i < keys.length(); ++i) {
-      String key = keys.getString(i);
-      if(key.toLowerCase().equals("apikey")) {
-        this.apiKey = options.getString(key);
+      final String key = keys.getString(i);
+      if(key.equalsIgnoreCase("apikey")) {
+        apiKey = options.getString(key);
         apiKeySet = true;
-      } else if(key.toLowerCase().equals("apisecret")) {
-        this.apiSecret = options.getString(key);
+      } else if(key.equalsIgnoreCase("apisecret")) {
+        apiSecret = options.getString(key);
         apiSecretSet = true;
-      } else if(key.toLowerCase().equals("accesswindow")) {
-        this.window = options.getInt(key);
+      } else if(key.equalsIgnoreCase("accesswindow")) {
+        window = options.getInt(key);
         windowSet = true;
-      } else if(key.toLowerCase().equals("debugging")) {
-        this.debugging = options.getBoolean(key);
+      } else if(key.equalsIgnoreCase("debugging")) {
+        debugging = options.getBoolean(key);
         debuggingSet = true;
-      } else if(key.toLowerCase().equals("resturl")) {
-        this.restUrl = options.getString(key);
+      } else if(key.equalsIgnoreCase("resturl")) {
+        restUrl = options.getString(key);
         restUrlSet = true;
-      } else if(key.toLowerCase().equals("wsurl")) {
-        this.wsUrl = options.getString(key);
+      } else if(key.equalsIgnoreCase("wsurl")) {
+        wsUrl = options.getString(key);
         wsUrlSet = true;
       }
     }
     if (!apiKeySet) {
-      this.apiKey = "";
+      apiKey = "";
     }
     if (!apiSecretSet) {
-      this.apiSecret = "";
+      apiSecret = "";
     }
     if (!windowSet) {
-      this.window = 10000;
+      window = 10000;
     }
     if (!debuggingSet) {
-      this.debugging = false;
+      debugging = false;
     }
     if (!restUrlSet) {
-      this.restUrl = "https://api.bitvavo.com/v2";
+      restUrl = "https://api.bitvavo.com/v2";
     }
     if (!wsUrlSet) {
-      this.wsUrl = "wss://ws.bitvavo.com/v2/";
+      wsUrl = "wss://ws.bitvavo.com/v2/";
     }
   }
 
@@ -104,11 +119,11 @@ public class Bitvavo {
     return this.apiSecret;
   }
 
-  private String createPostfix(JSONObject options) {
-    ArrayList<String> array = new ArrayList<>();
-    Iterator<?> keys = options.keys();
+  private String createPostfix(final JSONObject options) {
+    final ArrayList<String> array = new ArrayList<>();
+    final Iterator<?> keys = options.keys();
     while(keys.hasNext()) {
-      String key = (String) keys.next();
+      final String key = (String) keys.next();
       array.add(key + "=" + options.get(key).toString());
     }
     String params = String.join("&", array);
@@ -118,123 +133,81 @@ public class Bitvavo {
     return params;
   }
 
-  public String createSignature(long timestamp, String method, String urlEndpoint, JSONObject body) {
-    if(this.apiSecret == null || this.apiKey == null) {
-      errorToConsole("The API key or secret has not been set. Please pass the key and secret when instantiating the bitvavo object.");
+  public String createSignature(final long timestamp,final String method,final String urlEndpoint,final JSONObject body) {
+    if (apiSecret == null || apiKey == null) {
+      LOGGER.error("The API key or secret has not been set. Please pass the key and secret when instantiating the bitvavo object.");
       return "";
     }
     try {
       String result = String.valueOf(timestamp) + method + "/v2" + urlEndpoint;
       if(body.length() != 0) {
-        result = result + bodyToJsonString(body);
+        result = result + body.toString();
       }
-      Mac sha256_HMAC = Mac.getInstance("HmacSHA256");
-      SecretKeySpec secret_key = new SecretKeySpec(this.apiSecret.getBytes("UTF-8"), "HmacSHA256");
-      sha256_HMAC.init(secret_key);
-      return new String(Hex.encodeHex(sha256_HMAC.doFinal(result.getBytes("UTF-8"))));
-    }
-    catch(Exception ex) {
-      errorToConsole("Caught exception in createSignature " + ex);
+      final Mac sha256HMAC = Mac.getInstance("HmacSHA256");
+      final SecretKeySpec secretKey = new SecretKeySpec(apiSecret.getBytes(StandardCharsets.UTF_8), "HmacSHA256");
+      sha256HMAC.init(secretKey);
+      return new String(Hex.encodeHex(sha256HMAC.doFinal(result.getBytes(StandardCharsets.UTF_8))));
+    } catch(NoSuchAlgorithmException | InvalidKeyException e) {
+      LOGGER.error("Caught exception in createSignature",e);
       return "";
     }
-  }
+ }
 
-  public String bodyToJsonString(JSONObject body) {
-    Iterator<String> keys = body.keys();
-    DecimalFormat df = new DecimalFormat("0", DecimalFormatSymbols.getInstance(Locale.ENGLISH));
-    df.setMaximumFractionDigits(340);
-    String jsonString = "{";
-    Boolean first = true;
-
-    while(keys.hasNext()) {
-      String key = keys.next();
-      if (!first) {
-        jsonString = jsonString + ",";
-      } else {
-        first = false;
-      }
-
-      if ((body.get(key) instanceof Double) || (body.get(key) instanceof Float)) {
-        jsonString = jsonString + "\"" + key + "\":" + df.format(body.get(key));
-      } else if ((body.get(key) instanceof Integer) || (body.get(key) instanceof Long)) {
-        jsonString = jsonString + "\"" + key + "\":" + body.get(key).toString();
-      } else if (body.get(key) instanceof Boolean) {
-        jsonString = jsonString + "\"" + key + "\":" + body.get(key);
-      } else {
-        jsonString = jsonString + "\"" + key + "\":\"" + body.get(key).toString() + "\"";
-      }
-    }
-    jsonString = jsonString + "}";
-    return jsonString;
-  }
-
-  public void debugToConsole(String message) {
-    Calendar cal = Calendar.getInstance();
-    SimpleDateFormat sdf = new SimpleDateFormat("HH:mm:ss");
-    if(this.debugging) {
-      System.out.println(sdf.format(cal.getTime()) + " DEBUG: " + message);
+  private void debug(final String message) {
+    if(debugging && LOGGER.isDebugEnabled())  {
+      LOGGER.debug(message);
     }
   }
 
-  public void errorToConsole(String message) {
-    Calendar cal = Calendar.getInstance();
-    SimpleDateFormat sdf = new SimpleDateFormat("HH:mm:ss");
-    System.out.println(sdf.format(cal.getTime()) + " ERROR: " + message);
-  }
-
-  public void errorRateLimit(JSONObject response) {
+  public void errorRateLimit(final JSONObject response) {
     if (response.getInt("errorCode") == 105) {
       rateLimitRemaining = 0;
-      String message = response.getString("error");
-      String placeHolder = message.split(" at ")[1].replace(".", "");
+      final String message = response.getString("error");
+      final String placeHolder = message.split(" at ")[1].replace(".", "");
       rateLimitReset = Long.parseLong(placeHolder);
       if (!rateLimitThreadStarted) {
-        new Thread(new Runnable() {
-          public void run() {
+        new Thread(() -> {
             try {
               long timeToWait = rateLimitReset - System.currentTimeMillis();
               rateLimitThreadStarted = true;
-              debugToConsole("We are waiting for " + ((int) timeToWait / (int) 1000) + " seconds, untill the rate limit ban will be lifted.");
+              debug("We are waiting for " + ((int) timeToWait / 1000) + " seconds, untill the rate limit ban will be lifted.");
               Thread.sleep(timeToWait);
-            } catch (InterruptedException ie) {
-              errorToConsole("Got interrupted while waiting for the rate limit ban to be lifted.");
+            } catch (InterruptedException e) {
+              LOGGER.error("Got interrupted while waiting for the rate limit ban to be lifted.",e);
             }
             rateLimitThreadStarted = false;
             if (System.currentTimeMillis() >= rateLimitReset) {
-              debugToConsole("Rate limit ban has been lifted, resetting rate limit to 1000.");
+              debug("Rate limit ban has been lifted, resetting rate limit to 1000.");
               rateLimitRemaining = 1000;
             }
-          }
         }).start();
       }
     }
   }
 
-  public void updateRateLimit(Map<String,List<String>> response) {
-    String remainingHeader = response.get("bitvavo-ratelimit-remaining").get(0);
-    String resetHeader = response.get("bitvavo-ratelimit-resetat").get(0);
-    if(remainingHeader != null) {
+  public void updateRateLimit(final Map<String,List<String>> response) {
+    final String remainingHeader = response.get("bitvavo-ratelimit-remaining").get(0);
+    final String resetHeader = response.get("bitvavo-ratelimit-resetat").get(0);
+    if (remainingHeader != null) {
       rateLimitRemaining = Integer.parseInt(remainingHeader);
     }
-    if(resetHeader != null) {
+    if (resetHeader != null) {
       rateLimitReset = Long.parseLong(resetHeader);
       if (!rateLimitThreadStarted) {
-        new Thread(new Runnable() {
-          public void run() {
+        new Thread(() -> {
             try {
-              long timeToWait = rateLimitReset - System.currentTimeMillis();
+              final long timeToWait = rateLimitReset - System.currentTimeMillis();
               rateLimitThreadStarted = true;
-              debugToConsole("We started a thread which waits for " + ((int) timeToWait / (int) 1000) + " seconds, untill the rate limit will be reset.");
+              debug("We started a thread which waits for " + ((int) timeToWait / 1000) + " seconds, untill the rate limit will be reset.");
               Thread.sleep(timeToWait);
-            } catch (InterruptedException ie) {
-              errorToConsole("Got interrupted while waiting for the rate limit to be reset.");
+            } catch (InterruptedException e) {
+              LOGGER.error("Got interrupted while waiting for the rate limit to be reset.",e);
             }
             rateLimitThreadStarted = false;
             if (System.currentTimeMillis() >= rateLimitReset) {
-              debugToConsole("Resetting rate limit to 1000.");
+              debug("Resetting rate limit to 1000.");
               rateLimitRemaining = 1000;
             }
-          }
         }).start();
       }
     }
@@ -244,150 +217,142 @@ public class Bitvavo {
     return rateLimitRemaining;
   }
 
-  public JSONObject privateRequest(String urlEndpoint, String urlParams, String method, JSONObject body) {
+  private JSONObject privateRequest(final String urlEndpoint,final String urlParams,final String method,final JSONObject body) {
     try {
-      long timestamp = System.currentTimeMillis();
-      String signature = createSignature(timestamp, method, (urlEndpoint + urlParams), body);
-      URL url = new URL(this.restUrl + urlEndpoint + urlParams);
-      HttpsURLConnection httpsCon = (HttpsURLConnection) url.openConnection();
+      final long timestamp = System.currentTimeMillis();
+      final String signature = createSignature(timestamp, method, (urlEndpoint + urlParams), body);
+      final URL url = new URL(this.restUrl + urlEndpoint + urlParams);
+      final HttpsURLConnection httpsCon = (HttpsURLConnection) url.openConnection();
 
       httpsCon.setRequestMethod(method);
-      httpsCon.setRequestProperty("bitvavo-access-key", this.apiKey);
+      httpsCon.setRequestProperty("bitvavo-access-key", apiKey);
       httpsCon.setRequestProperty("bitvavo-access-signature", signature);
       httpsCon.setRequestProperty("bitvavo-access-timestamp", String.valueOf(timestamp));
-      httpsCon.setRequestProperty("bitvavo-access-window", String.valueOf(this.window));
+      httpsCon.setRequestProperty("bitvavo-access-window", String.valueOf(window));
       httpsCon.setRequestProperty("content-type", "application/json");
       if(body.length() != 0) {
         httpsCon.setDoOutput(true);
-        OutputStreamWriter outputStreamWriter = new OutputStreamWriter(httpsCon.getOutputStream());
+        final OutputStreamWriter outputStreamWriter = new OutputStreamWriter(httpsCon.getOutputStream());
         outputStreamWriter.write(body.toString());
         outputStreamWriter.flush();
       }
 
-
       int responseCode = httpsCon.getResponseCode();
-      
+
       InputStream inputStream;
       if(responseCode == 200) {
         inputStream = httpsCon.getInputStream();
         updateRateLimit(httpsCon.getHeaderFields());
-      }
-      else {
+      } else {
         inputStream = httpsCon.getErrorStream();
       }
-      StringWriter writer = new StringWriter();
-      IOUtils.copy(inputStream, writer, "utf-8");
-      String result = writer.toString();
+      final StringWriter writer = new StringWriter();
+      IOUtils.copy(inputStream, writer, StandardCharsets.UTF_8);
+      final String result = writer.toString();
 
-      JSONObject response = new JSONObject(result);
+      final JSONObject response = new JSONObject(result);
       if (result.contains("errorCode")) {
         errorRateLimit(response);
       }
       return response;
-    }
-    catch(Exception ex) {
-      errorToConsole("Caught exception in privateRequest " + ex);
+    } catch (final IOException e) {
+      LOGGER.error("Caught exception in privateRequest",e);
       return new JSONObject();
     }
   }
 
-  public JSONArray privateRequestArray(String urlEndpoint, String urlParams, String method, JSONObject body) {
+  private JSONArray privateRequestArray(final String urlEndpoint,final String urlParams,final String method,final JSONObject body) {
     try {
-      long timestamp = System.currentTimeMillis();
-      String signature = createSignature(timestamp, method, (urlEndpoint + urlParams), body);
-      URL url = new URL(this.restUrl + urlEndpoint + urlParams);
-      HttpsURLConnection httpsCon = (HttpsURLConnection) url.openConnection();
+      final long timestamp = System.currentTimeMillis();
+      final String signature = createSignature(timestamp, method, (urlEndpoint + urlParams), body);
+      final URL url = new URL(restUrl + urlEndpoint + urlParams);
+      final HttpsURLConnection httpsCon = (HttpsURLConnection) url.openConnection();
 
       httpsCon.setRequestMethod(method);
-      httpsCon.setRequestProperty("bitvavo-access-key", this.apiKey);
+      httpsCon.setRequestProperty("bitvavo-access-key", apiKey);
       httpsCon.setRequestProperty("bitvavo-access-signature", signature);
       httpsCon.setRequestProperty("bitvavo-access-timestamp", String.valueOf(timestamp));
-      httpsCon.setRequestProperty("bitvavo-access-window", String.valueOf(this.window));
+      httpsCon.setRequestProperty("bitvavo-access-window", String.valueOf(window));
       httpsCon.setRequestProperty("content-type", "application/json");
       if(body.length() != 0) {
         httpsCon.setDoOutput(true);
-        OutputStreamWriter outputStreamWriter = new OutputStreamWriter(httpsCon.getOutputStream());
+        final OutputStreamWriter outputStreamWriter = new OutputStreamWriter(httpsCon.getOutputStream());
         outputStreamWriter.write(body.toString());
         outputStreamWriter.flush();
       }
 
       int responseCode = httpsCon.getResponseCode();
-      
+
       InputStream inputStream;
-      if(responseCode == 200) {
+      if (responseCode == 200) {
         inputStream = httpsCon.getInputStream();
         updateRateLimit(httpsCon.getHeaderFields());
-      }
-      else {
+      } else {
         inputStream = httpsCon.getErrorStream();
       }
 
-      StringWriter writer = new StringWriter();
-      IOUtils.copy(inputStream, writer, "utf-8");
+      final StringWriter writer = new StringWriter();
+      IOUtils.copy(inputStream, writer, StandardCharsets.UTF_8);
       String result = writer.toString();
 
       if(result.contains("errorCode")) {
         errorRateLimit(new JSONObject(result));
-        errorToConsole(result);
+        LOGGER.error(result);
         return new JSONArray();
       }
 
-      JSONArray response = new JSONArray(result);
-      return response;
-    }
-    catch(Exception ex) {
-      errorToConsole("Caught exception in privateRequest " + ex);
+      return new JSONArray(result);
+    } catch(final IOException e) {
+      LOGGER.error("Caught exception in privateRequestArray",e);
       return new JSONArray();
     }
   }
 
-  public JSONObject publicRequest(String urlString, String method, JSONObject data) {
+  public JSONObject publicRequest(final String urlString,final String method) {
     try {
-      URL url = new URL(urlString);
-      HttpsURLConnection httpsCon = (HttpsURLConnection) url.openConnection();
+      final URL url = new URL(urlString);
+      final HttpsURLConnection httpsCon = (HttpsURLConnection) url.openConnection();
       httpsCon.setRequestMethod(method);
-      if (this.apiKey != "") {
-        long timestamp = System.currentTimeMillis();
-        String signature = createSignature(timestamp, method, urlString.replace(this.restUrl, ""), new JSONObject());
+      if (!apiKey.isEmpty()) {
+        final long timestamp = System.currentTimeMillis();
+        final String signature = createSignature(timestamp, method, urlString.replace(this.restUrl, ""), new JSONObject());
         httpsCon.setRequestProperty("bitvavo-access-key", this.apiKey);
         httpsCon.setRequestProperty("bitvavo-access-signature", signature);
         httpsCon.setRequestProperty("bitvavo-access-timestamp", String.valueOf(timestamp));
         httpsCon.setRequestProperty("bitvavo-access-window", String.valueOf(this.window));
         httpsCon.setRequestProperty("content-type", "application/json");
       }
-      int responseCode = httpsCon.getResponseCode();
+      final int responseCode = httpsCon.getResponseCode();
       InputStream inputStream;
       if(responseCode == 200) {
         inputStream = httpsCon.getInputStream();
         updateRateLimit(httpsCon.getHeaderFields());
-      }
-      else {
+      } else {
         inputStream = httpsCon.getErrorStream();
       }
-      StringWriter writer = new StringWriter();
-      IOUtils.copy(inputStream, writer, "utf-8");
-      String result = writer.toString();
+      final StringWriter writer = new StringWriter();
+      IOUtils.copy(inputStream, writer, StandardCharsets.UTF_8);
+      final String result = writer.toString();
 
-      JSONObject response = new JSONObject(result);
+      final JSONObject response = new JSONObject(result);
       if (result.contains("errorCode")) {
         errorRateLimit(response);
       }
       return response;
-    }
-    catch(IOException ex) {
-      errorToConsole("Caught IOerror, " + ex);
+    } catch(final IOException e) {
+      LOGGER.error("publicRequest",e);
     }
     return new JSONObject("{}");
   }
 
-  public JSONArray publicRequestArray(String urlString, String method, JSONObject data) {
+  public JSONArray publicRequestArray(final String urlString,final String method) {
     try {
       URL url = new URL(urlString);
       HttpsURLConnection httpsCon = (HttpsURLConnection) url.openConnection();
       httpsCon.setRequestMethod(method);
-      if (this.apiKey != "") {
-        long timestamp = System.currentTimeMillis();
-        String signature = createSignature(timestamp, method, urlString.replace(this.restUrl, ""), new JSONObject());
+      if (!apiKey.isEmpty()) {
+        final long timestamp = System.currentTimeMillis();
+        final String signature = createSignature(timestamp, method, urlString.replace(this.restUrl, ""), new JSONObject());
         httpsCon.setRequestProperty("bitvavo-access-key", this.apiKey);
         httpsCon.setRequestProperty("bitvavo-access-signature", signature);
         httpsCon.setRequestProperty("bitvavo-access-timestamp", String.valueOf(timestamp));
@@ -399,28 +364,22 @@ public class Bitvavo {
       if(responseCode == 200) {
         inputStream = httpsCon.getInputStream();
         updateRateLimit(httpsCon.getHeaderFields());
-      }
-      else {
+      } else {
         inputStream = httpsCon.getErrorStream();
       }
 
-      StringWriter writer = new StringWriter();
-      IOUtils.copy(inputStream, writer, "utf-8");
-      String result = writer.toString();
+      final StringWriter writer = new StringWriter();
+      IOUtils.copy(inputStream, writer, StandardCharsets.UTF_8);
+      final String result = writer.toString();
       if(result.indexOf("error") != -1) {
         errorRateLimit(new JSONObject(result));
         return new JSONArray("[" + result + "]");
       }
-      debugToConsole("FULL RESPONSE: " + result);
+      debug("FULL RESPONSE: " + result);
 
-      JSONArray response = new JSONArray(result);
-      return response;
-    }
-    catch(MalformedURLException ex) {
-      errorToConsole("Caught Malformed Url error, " + ex);
-    }
-    catch(IOException ex) {
-      errorToConsole("Caught IOerror, " + ex);
+      return new JSONArray(result);
+    } catch(final IOException e) {
+      LOGGER.error("publicRequestArray",e);
     }
     return new JSONArray("[{}]");
   }
@@ -430,7 +389,7 @@ public class Bitvavo {
    * @return JSONObject response, get time through response.getLong("time")
    */
   public JSONObject time() {
-    return publicRequest((this.restUrl + "/time"), "GET", new JSONObject());
+    return publicRequest((this.restUrl + "/time"), "GET");
   }
 
   /**
@@ -438,14 +397,14 @@ public class Bitvavo {
    * @param options optional parameters: market
    * @return JSONArray response, get markets by iterating over array: response.get(index)
    */
-  public JSONArray markets(JSONObject options) {
-    String postfix = createPostfix(options);
+  public JSONArray markets(final JSONObject options) {
+    final String postfix = createPostfix(options);
     if(options.has("market")) {
-      JSONArray returnArray = new JSONArray();
-      returnArray.put(publicRequest((this.restUrl + "/markets" + postfix), "GET", new JSONObject()));
+      final JSONArray returnArray = new JSONArray();
+      returnArray.put(publicRequest((restUrl + "/markets" + postfix), "GET"));
       return returnArray;
     } else {
-      return publicRequestArray((this.restUrl + "/markets" + postfix), "GET", new JSONObject());
+      return publicRequestArray((restUrl + "/markets" + postfix), "GET");
     }
   }
 
@@ -454,14 +413,14 @@ public class Bitvavo {
    * @param options optional parameters: symbol
    * @return JSONArray response, get assets by iterating over array response.get(index)
    */
-  public JSONArray assets(JSONObject options) {
-    String postfix = createPostfix(options);
+  public JSONArray assets(final JSONObject options) {
+    final String postfix = createPostfix(options);
     if(options.has("symbol")) {
-      JSONArray returnArray = new JSONArray();
-      returnArray.put(publicRequest((this.restUrl + "/assets" + postfix), "GET", new JSONObject()));
+      final JSONArray returnArray = new JSONArray();
+      returnArray.put(publicRequest((restUrl + "/assets" + postfix), "GET"));
       return returnArray;
     } else {
-      return publicRequestArray((this.restUrl + "/assets" + postfix), "GET", new JSONObject());
+      return publicRequestArray((restUrl + "/assets" + postfix), "GET");
     }
   }
 
@@ -471,9 +430,9 @@ public class Bitvavo {
    * @param options optional parameters: depth
    * @return JSONObject response, get bids through response.getJSONArray("bids"), asks through response.getJSONArray("asks")
    */
-  public JSONObject book(String market, JSONObject options) {
-    String postfix = createPostfix(options);
-    return publicRequest((this.restUrl + "/" + market + "/book" + postfix), "GET", new JSONObject());
+  public JSONObject book(final String market,final JSONObject options) {
+    final String postfix = createPostfix(options);
+    return publicRequest((restUrl + "/" + market + "/book" + postfix), "GET");
   }
 
   /**
@@ -482,9 +441,9 @@ public class Bitvavo {
    * @param options optional parameters: limit, start, end, tradeIdFrom, tradeIdTo
    * @return JSONArray response, iterate over array to get individual trades response.getJSONObject(index)
    */
-  public JSONArray publicTrades(String market, JSONObject options) {
-    String postfix = createPostfix(options);
-    return publicRequestArray((this.restUrl + "/" + market + "/trades" + postfix), "GET", new JSONObject());
+  public JSONArray publicTrades(final String market,final JSONObject options) {
+    final String postfix = createPostfix(options);
+    return publicRequestArray((restUrl + "/" + market + "/trades" + postfix), "GET");
   }
 
   /**
@@ -494,10 +453,10 @@ public class Bitvavo {
    * @param options optional parameters: limit, start, end
    * @return JSONArray response, get individual candles through response.getJSONArray(index)
    */
-  public JSONArray candles(String market, String interval, JSONObject options) {
+  public JSONArray candles(final String market,final String interval,final JSONObject options) {
     options.put("interval", interval);
-    String postfix = createPostfix(options);
-    return publicRequestArray((this.restUrl + "/" + market + "/candles" + postfix), "GET", new JSONObject());
+    final String postfix = createPostfix(options);
+    return publicRequestArray((restUrl + "/" + market + "/candles" + postfix), "GET");
   }
 
   /**
@@ -505,14 +464,14 @@ public class Bitvavo {
    * @param options optional parameters: market
    * @return JSONArray response, get individual prices by iterating over array: response.getJSONObject(index)
    */
-  public JSONArray tickerPrice(JSONObject options) {
-    String postfix = createPostfix(options);
+  public JSONArray tickerPrice(final JSONObject options) {
+    final String postfix = createPostfix(options);
     if(options.has("market")) {
-      JSONArray returnArray = new JSONArray();
-      returnArray.put(publicRequest((this.restUrl + "/ticker/price" + postfix), "GET", new JSONObject()));
+      final JSONArray returnArray = new JSONArray();
+      returnArray.put(publicRequest((restUrl + "/ticker/price" + postfix), "GET"));
       return returnArray;
     } else {
-      return publicRequestArray((this.restUrl + "/ticker/price" + postfix), "GET", new JSONObject());
+      return publicRequestArray((restUrl + "/ticker/price" + postfix), "GET");
     }
   }
 
@@ -521,14 +480,14 @@ public class Bitvavo {
    * @param options optional parameters: market
    * @return JSONArray response, get individual books by iterating over array: response.getJSONObject(index)
    */
-  public JSONArray tickerBook(JSONObject options) {
-    String postfix = createPostfix(options);
+  public JSONArray tickerBook(final JSONObject options) {
+    final String postfix = createPostfix(options);
     if(options.has("market")) {
-      JSONArray returnArray = new JSONArray();
-      returnArray.put(publicRequest((this.restUrl + "/ticker/book" + postfix), "GET", new JSONObject()));
+      final JSONArray returnArray = new JSONArray();
+      returnArray.put(publicRequest((restUrl + "/ticker/book" + postfix), "GET"));
       return returnArray;
     } else {
-      return publicRequestArray((this.restUrl + "/ticker/book" + postfix), "GET", new JSONObject()); 
+      return publicRequestArray((restUrl + "/ticker/book" + postfix), "GET"); 
     }
   }
 
@@ -537,14 +496,14 @@ public class Bitvavo {
    * @param options optional parameters: market
    * @return JSONArray response, get individual 24 hour prices by iterating over array: response.getJSONObject(index)
    */
-  public JSONArray ticker24h(JSONObject options) {
-    String postfix = createPostfix(options);
+  public JSONArray ticker24h(final JSONObject options) {
+    final String postfix = createPostfix(options);
     if(options.has("market")) {
-      JSONArray returnArray = new JSONArray();
-      returnArray.put(publicRequest((this.restUrl + "/ticker/24h" + postfix), "GET", new JSONObject()));
+      final JSONArray returnArray = new JSONArray();
+      returnArray.put(publicRequest((restUrl + "/ticker/24h" + postfix), "GET"));
       return returnArray;
     } else {
-      return publicRequestArray((this.restUrl + "/ticker/24h" + postfix), "GET", new JSONObject()); 
+      return publicRequestArray((restUrl + "/ticker/24h" + postfix), "GET"); 
     }
   }
 
@@ -559,7 +518,7 @@ public class Bitvavo {
    *                                       all orderTypes: timeInForce, selfTradePrevention, responseRequired
    * @return JSONObject response, get status of the order through response.getString("status")
    */
-  public JSONObject placeOrder(String market, String side, String orderType, JSONObject body) {
+  public JSONObject placeOrder(final String market,final String side,final String orderType,final JSONObject body) {
     body.put("market", market);
     body.put("side", side);
     body.put("orderType", orderType);
@@ -572,11 +531,11 @@ public class Bitvavo {
    * @param orderId the id of the order
    * @return JSONObject response, get status of the order through response.getString("status")
    */
-  public JSONObject getOrder(String market, String orderId) {
-    JSONObject options = new JSONObject();
+  public JSONObject getOrder(final String market,final String orderId) {
+    final JSONObject options = new JSONObject();
     options.put("market", market);
     options.put("orderId", orderId);
-    String postfix = createPostfix(options);
+    final String postfix = createPostfix(options);
     return privateRequest("/order", postfix, "GET", new JSONObject());
   }
 
@@ -589,7 +548,7 @@ public class Bitvavo {
    *                                       stopLossLimit/takeProfitLimit: (amount, price, postOnly, triggerType, triggerReference, triggerAmount)
    * @return JSONObject response, get status of the order through response.getString("status")
    */
-  public JSONObject updateOrder(String market, String orderId, JSONObject body) {
+  public JSONObject updateOrder(final String market,final String orderId,final JSONObject body) {
     body.put("market", market);
     body.put("orderId", orderId);
     return privateRequest("/order", "", "PUT", body);
@@ -601,11 +560,11 @@ public class Bitvavo {
    * @param orderId the id of the order which should be cancelled
    * @return JSONObject response, get the id of the order which was cancelled through response.getString("orderId")
    */
-  public JSONObject cancelOrder(String market, String orderId) {
-    JSONObject options = new JSONObject();
+  public JSONObject cancelOrder(final String market,final String orderId) {
+    final JSONObject options = new JSONObject();
     options.put("market", market);
     options.put("orderId", orderId);
-    String postfix = createPostfix(options);
+    final String postfix = createPostfix(options);
     return privateRequest("/order", postfix, "DELETE", new JSONObject());
   }
 
@@ -615,9 +574,9 @@ public class Bitvavo {
    * @param options optional parameters: limit, start, end, orderIdFrom, orderIdTo
    * @return JSONArray response, get individual orders by iterating over array: response.getJSONObject(index)
    */
-  public JSONArray getOrders(String market, JSONObject options) {
+  public JSONArray getOrders(final String market,final JSONObject options) {
     options.put("market", market);
-    String postfix = createPostfix(options);
+    final String postfix = createPostfix(options);
     return privateRequestArray("/orders", postfix, "GET", new JSONObject());
   }
 
@@ -626,8 +585,8 @@ public class Bitvavo {
    * @param options optional parameters: market
    * @return JSONArray response, get individual cancelled orderId's by iterating over array: response.getJSONObject(index).getString("orderId")
    */
-  public JSONArray cancelOrders(JSONObject options) {
-    String postfix = createPostfix(options);
+  public JSONArray cancelOrders(final JSONObject options) {
+    final String postfix = createPostfix(options);
     return privateRequestArray("/orders", postfix, "DELETE", new JSONObject());
   }
 
@@ -636,8 +595,8 @@ public class Bitvavo {
    * @param options optional parameters: market
    * @return JSONArray response, get individual orders by iterating over array: response.getJSONObject(index)
    */
-  public JSONArray ordersOpen(JSONObject options) {
-    String postfix = createPostfix(options);
+  public JSONArray ordersOpen(final JSONObject options) {
+    final String postfix = createPostfix(options);
     return privateRequestArray("/ordersOpen", postfix, "GET", new JSONObject());
   }
 
@@ -647,9 +606,9 @@ public class Bitvavo {
    * @param options optional parameters: limit, start, end, tradeIdFrom, tradeIdTo
    * @return JSONArray trades, get individual trades by iterating over array: response.getJSONObject(index)
    */
-  public JSONArray trades(String market, JSONObject options) {
+  public JSONArray trades(final String market,final JSONObject options) {
     options.put("market", market);
-    String postfix = createPostfix(options);
+    final String postfix = createPostfix(options);
     return privateRequestArray("/trades", postfix, "GET", new JSONObject());
   }
 
@@ -666,8 +625,8 @@ public class Bitvavo {
    * @param options optional parameters: symbol
    * @return JSONArray response, get individual balances by iterating over array: response.getJSONObject(index)
    */
-  public JSONArray balance(JSONObject options) {
-    String postfix = createPostfix(options);
+  public JSONArray balance(final JSONObject options) {
+    final String postfix = createPostfix(options);
     return privateRequestArray("/balance", postfix, "GET", new JSONObject());
   }
 
@@ -676,10 +635,10 @@ public class Bitvavo {
    * @param symbol the crypto currency for which the address should be returned
    * @return JSONObject response, get address through response.getString("address")
    */
-  public JSONObject depositAssets(String symbol) {
-    JSONObject options = new JSONObject();
+  public JSONObject depositAssets(final String symbol) {
+    final JSONObject options = new JSONObject();
     options.put("symbol", symbol);
-    String postfix = createPostfix(options);
+    final String postfix = createPostfix(options);
     return privateRequest("/deposit", postfix, "GET", new JSONObject());
   }
 
@@ -691,7 +650,7 @@ public class Bitvavo {
    * @param body optional parameters: paymentId, internal, addWithdrawalFee
    * @return JSONObject response, get success confirmation through response.getBoolean("success")
    */
-  public JSONObject withdrawAssets(String symbol, String amount, String address, JSONObject body) {
+  public JSONObject withdrawAssets(final String symbol,final String amount,final String address,final JSONObject body) {
     body.put("symbol", symbol);
     body.put("amount", amount);
     body.put("address", address);
@@ -703,8 +662,8 @@ public class Bitvavo {
    * @param options optional parameters: symbol, limit, start, end
    * @return JSONArray response, get individual deposits by iterating over the array: response.getJSONObject(index)
    */
-  public JSONArray depositHistory(JSONObject options) {
-    String postfix = createPostfix(options);
+  public JSONArray depositHistory(final JSONObject options) {
+    final String postfix = createPostfix(options);
     return privateRequestArray("/depositHistory", postfix, "GET", new JSONObject());
   }
 
@@ -713,8 +672,8 @@ public class Bitvavo {
    * @param options optional parameters: symbol, limit, start, end
    * @return JSONArray response, get individual withdrawals by iterating over the array: response.getJSONObject(index)
    */
-  public JSONArray withdrawalHistory(JSONObject options) {
-    String postfix = createPostfix(options);
+  public JSONArray withdrawalHistory(final JSONObject options) {
+    final String postfix = createPostfix(options);
     return privateRequestArray("/withdrawalHistory", postfix, "GET", new JSONObject());
   }
 
@@ -730,32 +689,24 @@ public class Bitvavo {
   public class Websocket {
     public Websocket() {
       try {
-        final WebsocketClientEndpoint clientEndPoint = new WebsocketClientEndpoint(new URI(Bitvavo.this.wsUrl), Bitvavo.this);
-        clientEndPoint.addAuthenticateHandler(new WebsocketClientEndpoint.MessageHandler() {
-          public void handleMessage(JSONObject response) {
+        final WebsocketClientEndpoint clientEndPoint = new WebsocketClientEndpoint(new URI(wsUrl), Bitvavo.this);
+        clientEndPoint.addAuthenticateHandler(response -> {
             if(response.has("authenticated")) {
               authenticated = true;
-              debugToConsole("We registered authenticated as true");
+              debug("We registered authenticated as true");
             }
-          }
         });
-        clientEndPoint.addMessageHandler(new WebsocketClientEndpoint.MessageHandler() {
-          public void handleMessage(JSONObject response) {
-            errorToConsole("Unexpected message: " + response);
-          }
-        });
+        clientEndPoint.addMessageHandler(response -> LOGGER.error("Unexpected message: {}",response));
         ws = clientEndPoint;
-        book = new HashMap<String,Object>();
-        KeepAliveThread keepAliveThread = new KeepAliveThread();
+        book = new HashMap<>();
+        keepAliveThread = new KeepAliveThread();
         keepAliveThread.start();
-        Bitvavo.this.keepAliveThread = keepAliveThread;
-      }
-      catch(Exception ex) {
-        errorToConsole("Caught exception in websocket: " + ex);
+      } catch (final URISyntaxException e) {
+        LOGGER.error("Caught exception in websocket",e);
       }
     }
 
-    void handleBook(Runnable function) {
+    void handleBook(final Runnable function) {
       function.run();
     }
 
@@ -763,23 +714,21 @@ public class Bitvavo {
       ws.closeSocket();
     }
 
-    public void doSendPublic(JSONObject options) {
+    public void doSendPublic(final JSONObject options) {
       ws.sendMessage(options.toString());
     }
 
-    public void doSendPrivate(JSONObject options) {
+    public void doSendPrivate(final JSONObject options) {
       if(getApiKey() == null) {
-        errorToConsole("You forgot to set the key and secret, both are required for this functionality.");
-      }
-      else if(authenticated) {
+        LOGGER.error("You forgot to set the key and secret, both are required for this functionality.");
+      } else if(authenticated) {
         ws.sendMessage(options.toString());
       } else {
         try {
           TimeUnit.MILLISECONDS.sleep(50);
           doSendPrivate(options);
-        }
-        catch(InterruptedException ex) {
-          errorToConsole("Interrupted, aborting send.");
+        } catch (final InterruptedException e) {
+          LOGGER.error("Interrupted, aborting send.",e);
         }
       }
     }
@@ -788,7 +737,7 @@ public class Bitvavo {
      * Sets the callback for errors
      * @param msgHandler callback
      */
-    public void setErrorCallback(WebsocketClientEndpoint.MessageHandler msgHandler) {
+    public void setErrorCallback(final WebsocketClientEndpoint.MessageHandler msgHandler) {
       ws.addErrorHandler(msgHandler);
     }
 
@@ -797,7 +746,7 @@ public class Bitvavo {
    *@param msgHandler callback
    * @return JSONObject response, get time through response.getJSONObject("response").getLong("time")
    */
-    public void time(WebsocketClientEndpoint.MessageHandler msgHandler) {
+    public void time(final WebsocketClientEndpoint.MessageHandler msgHandler) {
       ws.addTimeHandler(msgHandler);
       doSendPublic(new JSONObject("{ action: getTime }"));
     }
@@ -809,7 +758,7 @@ public class Bitvavo {
    * @param msgHandler callback
    * @return JSONObject response, get markets through response.getJSONArray("response") and iterate over array to get objects array.getJSONObject(index)
    */
-    public void markets(JSONObject options, WebsocketClientEndpoint.MessageHandler msgHandler) {
+    public void markets(final JSONObject options,final WebsocketClientEndpoint.MessageHandler msgHandler) {
       ws.addMarketsHandler(msgHandler);
       options.put("action", "getMarkets");
       doSendPublic(options);
@@ -822,7 +771,7 @@ public class Bitvavo {
    * @param msgHandler callback
    * @return JSONObject response, get assets through response.getJSONArray("response") and iterate over array to get objects array.getJSONObject(index)
    */
-    public void assets(JSONObject options, WebsocketClientEndpoint.MessageHandler msgHandler) {
+    public void assets(final JSONObject options,final WebsocketClientEndpoint.MessageHandler msgHandler) {
       ws.addAssetsHandler(msgHandler);
       options.put("action", "getAssets");
       doSendPublic(options);
@@ -836,14 +785,14 @@ public class Bitvavo {
    * @param msgHandler callback
    * @return JSONObject response, get book through response.getJSONObject("response") and get individual values through object.getJSONArray("bids"/"asks").get(index).get(index)
    */
-    public void book(String market, JSONObject options, WebsocketClientEndpoint.MessageHandler msgHandler) {
+    public void book(final String market,final JSONObject options,final WebsocketClientEndpoint.MessageHandler msgHandler) {
       ws.addBookHandler(msgHandler);
       options.put("action", "getBook");
       options.put("market", market);
       doSendPublic(options);
     }
 
-    /**
+   /**
    * Returns the trades per market.
    *
    * @param market market for which the trades should be returned.
@@ -851,14 +800,14 @@ public class Bitvavo {
    * @param msgHandler callback
    * @return JSONObject response, get trades through response.getJSONArray("response") and iterate over array to get objects array.getJSONObject(index)
    */
-    public void publicTrades(String market, JSONObject options, WebsocketClientEndpoint.MessageHandler msgHandler) {
+    public void publicTrades(final String market,final JSONObject options,final WebsocketClientEndpoint.MessageHandler msgHandler) {
       ws.addTradesHandler(msgHandler);
       options.put("action", "getTrades");
       options.put("market", market);
       doSendPublic(options);
     }
 
-    /**
+   /**
    * Returns the candles per market.
    *
    * @param market market for which the candles should be returned.
@@ -867,7 +816,7 @@ public class Bitvavo {
    * @param msgHandler callback
    * @return JSONObject response, get candles through response.getJSONArray("response") and iterate over array to get arrays containing timestamp, open, high, low, close and volume: array.getJSONArray(index) (i.e. for the open price array.getJSONArray(index).get(1))
    */
-    public void candles(String market, String interval, JSONObject options, WebsocketClientEndpoint.MessageHandler msgHandler) {
+    public void candles(final String market,final String interval,final JSONObject options,final WebsocketClientEndpoint.MessageHandler msgHandler) {
       ws.addCandlesHandler(msgHandler);
       options.put("action", "getCandles");
       options.put("market", market);
@@ -882,7 +831,7 @@ public class Bitvavo {
    * @param msgHandler callback
    * @return JSONObject response, get array through response.getJSONArray("response") and iterate over array to get 24h ticker objects array.getJSONObject(index)
    */
-    public void ticker24h(JSONObject options, WebsocketClientEndpoint.MessageHandler msgHandler) {
+    public void ticker24h(final JSONObject options,final WebsocketClientEndpoint.MessageHandler msgHandler) {
       ws.addTicker24hHandler(msgHandler);
       options.put("action", "getTicker24h");
       doSendPublic(options);
@@ -895,7 +844,7 @@ public class Bitvavo {
    * @param msgHandler callback
    * @return JSONObject response, get array through response.getJSONArray("response") and iterate over array to get price ticker objects array.getJSONObject(index)
    */
-    public void tickerPrice(JSONObject options, WebsocketClientEndpoint.MessageHandler msgHandler) {
+    public void tickerPrice(final JSONObject options,final WebsocketClientEndpoint.MessageHandler msgHandler) {
       ws.addTickerPriceHandler(msgHandler);
       options.put("action", "getTickerPrice");
       doSendPublic(options);
@@ -908,7 +857,7 @@ public class Bitvavo {
    * @param msgHandler callback
    * @return JSONObject response, get array through response.getJSONArray("response") and iterate over array to get book ticker objects array.getJSONObject(index)
    */
-    public void tickerBook(JSONObject options, WebsocketClientEndpoint.MessageHandler msgHandler) {
+    public void tickerBook(final JSONObject options,final WebsocketClientEndpoint.MessageHandler msgHandler) {
       ws.addTickerBookHandler(msgHandler);
       options.put("action", "getTickerBook");
       doSendPublic(options);
@@ -927,7 +876,7 @@ public class Bitvavo {
    * @param msgHandler callback
    * @return JSONObject response, get order object through response.getJSONObject("response")
    */
-    public void placeOrder(String market, String side, String orderType, JSONObject body, WebsocketClientEndpoint.MessageHandler msgHandler) {
+    public void placeOrder(final String market,final String side,final String orderType,final JSONObject body,final WebsocketClientEndpoint.MessageHandler msgHandler) {
       ws.addPlaceOrderHandler(msgHandler);
       body.put("market", market);
       body.put("side", side);
@@ -944,9 +893,9 @@ public class Bitvavo {
    * @param msgHandler callback
    * @return JSONObject response, get order object through response.getJSONObject("response")
    */
-    public void getOrder(String market, String orderId, WebsocketClientEndpoint.MessageHandler msgHandler) {
+    public void getOrder(final String market,final String orderId,final WebsocketClientEndpoint.MessageHandler msgHandler) {
       ws.addGetOrderHandler(msgHandler);
-      JSONObject options = new JSONObject();
+      final JSONObject options = new JSONObject();
       options.put("action", "privateGetOrder");
       options.put("market", market);
       options.put("orderId", orderId);
@@ -964,7 +913,7 @@ public class Bitvavo {
    * @param msgHandler callback
    * @return JSONObject response, get order object through response.getJSONObject("response")
    */
-    public void updateOrder(String market, String orderId, JSONObject body, WebsocketClientEndpoint.MessageHandler msgHandler) {
+    public void updateOrder(final String market,final String orderId,final JSONObject body,final WebsocketClientEndpoint.MessageHandler msgHandler) {
       ws.addUpdateOrderHandler(msgHandler);
       body.put("market", market);
       body.put("orderId", orderId);
@@ -980,9 +929,9 @@ public class Bitvavo {
    * @param msgHandler callback
    * @return JSONObject response, get orderId through response.getJSONObject("response").getString("orderId")
    */
-    public void cancelOrder(String market, String orderId, WebsocketClientEndpoint.MessageHandler msgHandler) {
+    public void cancelOrder(final String market,final String orderId,final WebsocketClientEndpoint.MessageHandler msgHandler) {
       ws.addCancelOrderHandler(msgHandler);
-      JSONObject options = new JSONObject();
+      final JSONObject options = new JSONObject();
       options.put("action", "privateCancelOrder");
       options.put("market", market);
       options.put("orderId", orderId);
@@ -997,7 +946,7 @@ public class Bitvavo {
    * @param msgHandler callback
    * @return JSONObject response, get array through response.getJSONArray("response") and iterate over the array to get order objects array.getJSONObject(index)
    */
-    public void getOrders(String market, JSONObject options, WebsocketClientEndpoint.MessageHandler msgHandler) {
+    public void getOrders(final String market,final JSONObject options,final WebsocketClientEndpoint.MessageHandler msgHandler) {
       ws.addGetOrdersHandler(msgHandler);
       options.put("action", "privateGetOrders");
       options.put("market", market);
@@ -1011,7 +960,7 @@ public class Bitvavo {
    * @param msgHandler callback
    * @return JSONObject response, get array through response.getJSONArray("response") and iterate over the array to get orderId's objects array.getJSONObject(index).getString("orderId")
    */
-    public void cancelOrders(JSONObject options, WebsocketClientEndpoint.MessageHandler msgHandler) {
+    public void cancelOrders(final JSONObject options,final WebsocketClientEndpoint.MessageHandler msgHandler) {
       ws.addCancelOrdersHandler(msgHandler);
       options.put("action", "privateCancelOrders");
       doSendPrivate(options);
@@ -1024,7 +973,7 @@ public class Bitvavo {
    * @param msgHandler callback
    * @return JSONObject response, get array through response.getJSONArray("response") and iterate over the array to get open orders objects array.getJSONObject(index)
    */
-    public void ordersOpen(JSONObject options, WebsocketClientEndpoint.MessageHandler msgHandler) {
+    public void ordersOpen(final JSONObject options,final WebsocketClientEndpoint.MessageHandler msgHandler) {
       ws.addGetOrdersOpenHandler(msgHandler);
       options.put("action", "privateGetOrdersOpen");
       doSendPrivate(options);
@@ -1038,7 +987,7 @@ public class Bitvavo {
    * @param msgHandler callback
    * @return JSONObject response, get array through response.getJSONArray("response") and iterate over the array to get trades objects array.getJSONObject(index)
    */
-    public void trades(String market, JSONObject options, WebsocketClientEndpoint.MessageHandler msgHandler) {
+    public void trades(final String market,final JSONObject options,final WebsocketClientEndpoint.MessageHandler msgHandler) {
       ws.addGetTradesHandler(msgHandler);
       options.put("action", "privateGetTrades");
       options.put("market", market);
@@ -1051,9 +1000,9 @@ public class Bitvavo {
    * @param msgHandler callback
    * @return JSONObject response, get taker fee through response.getJSONObject("response").getJSONObject("fees").getString("taker")
    */
-    public void account(WebsocketClientEndpoint.MessageHandler msgHandler) {
+    public void account(final WebsocketClientEndpoint.MessageHandler msgHandler) {
       ws.addAccountHandler(msgHandler);
-      JSONObject options = new JSONObject("{ action: privateGetAccount }");
+      final JSONObject options = new JSONObject("{ action: privateGetAccount }");
       doSendPrivate(options);
     }
 
@@ -1064,7 +1013,7 @@ public class Bitvavo {
    * @param msgHandler callback
    * @return JSONObject response, get array through response.getJSONArray("response") and iterate over the array to get balance objects array.getJSONObject(index)
    */
-    public void balance(JSONObject options, WebsocketClientEndpoint.MessageHandler msgHandler) {
+    public void balance(final JSONObject options,final WebsocketClientEndpoint.MessageHandler msgHandler) {
       ws.addBalanceHandler(msgHandler);
       options.put("action", "privateGetBalance");
       doSendPrivate(options);
@@ -1077,9 +1026,9 @@ public class Bitvavo {
    * @param msgHandler callback
    * @return JSONObject response, get address through response.getJSONObject("response").getString("address")
    */
-    public void depositAssets(String symbol, WebsocketClientEndpoint.MessageHandler msgHandler) {
+    public void depositAssets(final String symbol,final WebsocketClientEndpoint.MessageHandler msgHandler) {
       ws.addDepositAssetsHandler(msgHandler);
-      JSONObject options = new JSONObject("{ action: privateDepositAssets }");
+      final JSONObject options = new JSONObject("{ action: privateDepositAssets }");
       options.put("symbol", symbol);
       doSendPrivate(options);
     }
@@ -1094,7 +1043,7 @@ public class Bitvavo {
    * @param msgHandler callback
    * @return JSONObject response, get success confirmation through response.getJSONObject("response").getBoolean("success")
    */
-    public void withdrawAssets(String symbol, String amount, String address, JSONObject body, WebsocketClientEndpoint.MessageHandler msgHandler) {
+    public void withdrawAssets(final String symbol,final String amount,final String address,final JSONObject body,final WebsocketClientEndpoint.MessageHandler msgHandler) {
       ws.addWithdrawAssetsHandler(msgHandler);
       body.put("action", "privateWithdrawAssets");
       body.put("symbol", symbol);
@@ -1110,7 +1059,7 @@ public class Bitvavo {
    * @param msgHandler callback
    * @return JSONObject response, get array through response.getJSONArray("response") and iterate over the array to get deposit objects array.getJSONObject(index)
    */
-    public void depositHistory(JSONObject options, WebsocketClientEndpoint.MessageHandler msgHandler) {
+    public void depositHistory(final JSONObject options,final WebsocketClientEndpoint.MessageHandler msgHandler) {
       ws.addDepositHistoryHandler(msgHandler);
       options.put("action", "privateGetDepositHistory");
       doSendPrivate(options);
@@ -1123,7 +1072,7 @@ public class Bitvavo {
    * @param msgHandler callback
    * @return JSONObject response, get array through response.getJSONArray("response") and iterate over the array to get withdrawal objects array.getJSONObject(index)
    */
-    public void withdrawalHistory(JSONObject options, WebsocketClientEndpoint.MessageHandler msgHandler) {
+    public void withdrawalHistory(final JSONObject options,final WebsocketClientEndpoint.MessageHandler msgHandler) {
       ws.addWithdrawalHistoryHandler(msgHandler);
       options.put("action", "privateGetWithdrawalHistory");
       doSendPrivate(options);
@@ -1136,10 +1085,10 @@ public class Bitvavo {
    * @param msgHandler callback, will be overwritten when subscriptionTicker() is called with the same market parameter.
    * @return JSONObject response, get bestBid through response.getString("bestBid") and bestAsk through response.getString("bestAsk")
    */
-    public void subscriptionTicker(String market, WebsocketClientEndpoint.MessageHandler msgHandler) {
+    public void subscriptionTicker(final String market,final WebsocketClientEndpoint.MessageHandler msgHandler) {
       ws.addSubscriptionTickerHandler(market, msgHandler);
-      JSONObject options = new JSONObject();
-      JSONObject subOptions = new JSONObject();
+      final JSONObject options = new JSONObject();
+      final JSONObject subOptions = new JSONObject();
       subOptions.put("name", "ticker");
       subOptions.put("markets", new String[] {market});
       options.put("action", "subscribe");
@@ -1159,10 +1108,10 @@ public class Bitvavo {
    * @param msgHandler callback, will be overwritten when subscriptionTicker() is called with the same market parameter.
    * @return JSONObject ticker, get individual fields through ticker.getString(<key>)
    */
-    public void subscriptionTicker24h(String market, WebsocketClientEndpoint.MessageHandler msgHandler) {
+    public void subscriptionTicker24h(final String market,final WebsocketClientEndpoint.MessageHandler msgHandler) {
       ws.addSubscriptionTicker24hHandler(market, msgHandler);
-      JSONObject options = new JSONObject();
-      JSONObject subOptions = new JSONObject();
+      final JSONObject options = new JSONObject();
+      final JSONObject subOptions = new JSONObject();
       subOptions.put("name", "ticker24h");
       subOptions.put("markets", new String[] {market});
       options.put("action", "subscribe");
@@ -1181,10 +1130,10 @@ public class Bitvavo {
    * @param msgHandler callback, will be overwritten on multiple calls to subscriptionAccount
    * @return JSONObject response, get type of event through response.getString("event")
    */
-    public void subscriptionAccount(String market, WebsocketClientEndpoint.MessageHandler msgHandler) {
+    public void subscriptionAccount(final String market,final WebsocketClientEndpoint.MessageHandler msgHandler) {
       ws.addSubscriptionAccountHandler(market, msgHandler);
-      JSONObject options = new JSONObject();
-      JSONObject subOptions = new JSONObject();
+      final JSONObject options = new JSONObject();
+      final JSONObject subOptions = new JSONObject();
       subOptions.put("name", "account");
       subOptions.put("markets", new String[] {market});
       options.put("action", "subscribe");
@@ -1205,17 +1154,17 @@ public class Bitvavo {
    * @param msgHandler callback, will be overwritten on multiple calls to subscriptionCandles() with the same market and interval
    * @return JSONObject response, get candle array (containing a single candle with open, high, low, close and volume) through response.getJSONObject("response").getJSONArray("candle")
    */
-    public void subscriptionCandles(String market, String interval, WebsocketClientEndpoint.MessageHandler msgHandler) {
+    public void subscriptionCandles(final String market,final String interval,final WebsocketClientEndpoint.MessageHandler msgHandler) {
       ws.addSubscriptionCandlesHandler(market, interval, msgHandler);
-      JSONObject options = new JSONObject();
-      JSONObject subOptions = new JSONObject();
+      final JSONObject options = new JSONObject();
+      final JSONObject subOptions = new JSONObject();
       subOptions.put("name", "candles");
       subOptions.put("interval", new String[] {interval});
       subOptions.put("markets", new String[] {market});
       options.put("action", "subscribe");
       options.put("channels", new JSONObject[] {subOptions});
       activatedSubscriptionCandles = true;
-      JSONObject intervalIndex = new JSONObject();
+      final JSONObject intervalIndex = new JSONObject();
       intervalIndex.put(interval, options);
       if(optionsSubscriptionCandles == null) {
         optionsSubscriptionCandles = new JSONObject();
@@ -1231,10 +1180,10 @@ public class Bitvavo {
    * @param msgHandler callback, will be overwritten on multiple calls to subscriptionTrades() with the same market
    * @return JSONObject response, get trade object through response.getJSONObject("response")
    */
-    public void subscriptionTrades(String market, WebsocketClientEndpoint.MessageHandler msgHandler) {
+    public void subscriptionTrades(final String market,final WebsocketClientEndpoint.MessageHandler msgHandler) {
       ws.addSubscriptionTradesHandler(market, msgHandler);
-      JSONObject options = new JSONObject();
-      JSONObject subOptions = new JSONObject();
+      final JSONObject options = new JSONObject();
+      final JSONObject subOptions = new JSONObject();
       subOptions.put("name", "trades");
       subOptions.put("markets", new String[] {market});
       options.put("action", "subscribe");
@@ -1254,10 +1203,10 @@ public class Bitvavo {
      * @param msgHandler callback, will be overwritten on multiple calls to subscriptionBook() with the same market
      * @return JSONObject response, the object only contains updates and not the entire book, get the updates through response.getJSONObject("response").getJSONArray("bids"/"asks")
      */
-    public void subscriptionBookUpdate(String market, WebsocketClientEndpoint.MessageHandler msgHandler) {
+    public void subscriptionBookUpdate(final String market,final WebsocketClientEndpoint.MessageHandler msgHandler) {
       ws.addSubscriptionBookUpdateHandler(market, msgHandler);
-      JSONObject options = new JSONObject();
-      JSONObject subOptions = new JSONObject();
+      final JSONObject options = new JSONObject();
+      final JSONObject subOptions = new JSONObject();
       subOptions.put("name", "book");
       subOptions.put("markets", new String[] {market});
       options.put("action", "subscribe");
@@ -1277,15 +1226,15 @@ public class Bitvavo {
      * @param msgHandler callback, will be overwritten on multiple calls to subscriptionBook() with the same market
      * @return Map<String, Object> book, this object has been converted to a Map such that List<List<String>> bids = (List<List<String>>)book.get("bids"); The entire book is contained in every callback
      */
-    public void subscriptionBook(String market, WebsocketClientEndpoint.BookHandler msgHandler) {
-      ws.keepBookCopy = true;
-      Map<String, Object> bidsAsks = new HashMap<String, Object>();
+    public void subscriptionBook(final String market,final WebsocketClientEndpoint.BookHandler msgHandler) {
+      ws.setKeepBookCopy(true);
+      final Map<String, Object> bidsAsks = new HashMap<>();
       bidsAsks.put("bids", new ArrayList<ArrayList<Float>>());
       bidsAsks.put("asks", new ArrayList<ArrayList<Float>>());
 
       book.put(market, bidsAsks);
       ws.addSubscriptionBookHandler(market, msgHandler);
-      JSONObject options = new JSONObject();
+      final JSONObject options = new JSONObject();
       options.put("action", "getBook");
       options.put("market", market);
       activatedSubscriptionBook = true;
@@ -1295,8 +1244,8 @@ public class Bitvavo {
       optionsSubscriptionBookFirst.put(market, options);
       doSendPublic(options);
 
-      JSONObject secondOptions = new JSONObject();
-      JSONObject subOptions = new JSONObject();
+      final JSONObject secondOptions = new JSONObject();
+      final JSONObject subOptions = new JSONObject();
       subOptions.put("name", "book");
       subOptions.put("markets", new String[] {market});
       secondOptions.put("action", "subscribe");
@@ -1308,4 +1257,108 @@ public class Bitvavo {
       doSendPublic(secondOptions);
     }
   }
+  
+  public boolean isDebugging() {
+   return debugging;
+  }
+
+  public KeepAliveThread getKeepAliveThread() {
+   return keepAliveThread;
+  }
+
+  public boolean isActivatedSubscriptionTicker() {
+   return activatedSubscriptionTicker;
+  }
+
+  public boolean isActivatedSubscriptionTicker24h() {
+   return activatedSubscriptionTicker24h;
+  }
+
+  public boolean isActivatedSubscriptionAccount() {
+   return activatedSubscriptionAccount;
+  }
+
+  public boolean isActivatedSubscriptionCandles() {
+   return activatedSubscriptionCandles;
+  }
+
+  public boolean isActivatedSubscriptionTrades() {
+   return activatedSubscriptionTrades;
+  }
+
+  public boolean isActivatedSubscriptionBookUpdate() {
+   return activatedSubscriptionBookUpdate;
+  }
+
+  public boolean isActivatedSubscriptionBook() {
+   return activatedSubscriptionBook;
+  }
+
+  public boolean isAuthenticated() {
+   return authenticated;
+  }
+
+  public void setAuthenticated(boolean authenticated) {
+   this.authenticated = authenticated;
+  }
+
+  public int getWindow() {
+   return window;
+  }
+
+  public void setWindow(int window) {
+   this.window = window;
+  }
+
+  public JSONObject getOptionsSubscriptionTicker() {
+   return optionsSubscriptionTicker;
+  }
+
+  public JSONObject getOptionsSubscriptionTicker24h() {
+   return optionsSubscriptionTicker24h;
+  }
+
+  public JSONObject getOptionsSubscriptionAccount() {
+   return optionsSubscriptionAccount;
+  }
+
+  public JSONObject getOptionsSubscriptionCandles() {
+   return optionsSubscriptionCandles;
+  }
+
+  public JSONObject getOptionsSubscriptionTrades() {
+   return optionsSubscriptionTrades;
+  }
+
+  public JSONObject getOptionsSubscriptionBookUpdate() {
+   return optionsSubscriptionBookUpdate;
+  }
+
+  public JSONObject getOptionsSubscriptionBookFirst() {
+   return optionsSubscriptionBookFirst;
+  }
+
+  public JSONObject getOptionsSubscriptionBookSecond() {
+   return optionsSubscriptionBookSecond;
+  }
+
+  public WebsocketClientEndpoint getWs() {
+   return ws;
+  }
+
+  public void setWs(WebsocketClientEndpoint ws) {
+   this.ws = ws;
+  }
+
+  public String getWsUrl() {
+   return wsUrl;
+  }
+
+  public Websocket getWebsocketObject() {
+   return websocketObject;
+  }
+
+  public Map<String, Object> getBook() {
+   return book;
+  }  
 }

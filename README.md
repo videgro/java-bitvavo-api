@@ -1,6 +1,6 @@
 <p align="center">
   <br>
-  <a href="https://bitvavo.com"><img src="https://bitvavo.com/assets/static/ext/logo-shape.svg" width="100" title="Bitvavo Logo"></a>
+  <a href="https://bitvavo.com"><img src="https://support.bitvavo.com/hc/theming_assets/01HZPGAY4SGG08N1BMWA1SG195.png" width="100" title="Bitvavo Logo"></a>
 </p>
 
 # Java Bitvavo Api

@@ -1,15 +1,20 @@
 package com.bitvavo.api;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 public class KeepAliveThread extends Thread {
+  private static final Logger LOGGER = LogManager.getLogger();
+
+  @Override
   public void run(){
     boolean keepRunning = true;
     while(keepRunning) {
-      try{
+      try {
         Thread.sleep(200);
-      }
-      catch(InterruptedException ex) {
+      } catch(InterruptedException e) {
         keepRunning = false;
-        System.out.println("KeepAliveThread got interrupted, terminating thread.");
+        LOGGER.error("KeepAliveThread got interrupted, terminating thread.",e);
       }
     }
   }
