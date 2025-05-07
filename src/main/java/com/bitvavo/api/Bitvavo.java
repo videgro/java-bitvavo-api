@@ -33,6 +33,7 @@ public class Bitvavo {
 
   private String apiKey;
   private String apiSecret;
+  private long operatorId;
   private String restUrl;
   private String wsUrl;
   private boolean authenticated;
@@ -65,6 +66,7 @@ public class Bitvavo {
     final JSONArray keys = options.names();
     boolean apiKeySet = false;
     boolean apiSecretSet = false;
+    boolean operatorIdSet = false;
     boolean windowSet = false;
     boolean debuggingSet = false;
     boolean restUrlSet = false;
@@ -77,6 +79,9 @@ public class Bitvavo {
       } else if(key.equalsIgnoreCase("apisecret")) {
         apiSecret = options.getString(key);
         apiSecretSet = true;
+      } else if(key.equalsIgnoreCase("operatorid")) {
+        operatorId = options.getLong(key);
+        operatorIdSet = true;
       } else if(key.equalsIgnoreCase("accesswindow")) {
         window = options.getInt(key);
         windowSet = true;
@@ -96,6 +101,9 @@ public class Bitvavo {
     }
     if (!apiSecretSet) {
       apiSecret = "";
+    }
+    if (!operatorIdSet) {
+      operatorId = 1;
     }
     if (!windowSet) {
       window = 10000;
@@ -522,6 +530,7 @@ public class Bitvavo {
     body.put("market", market);
     body.put("side", side);
     body.put("orderType", orderType);
+    body.put("operatorId", operatorId);
     return privateRequest("/order", "", "POST", body);
   }
 
@@ -551,6 +560,7 @@ public class Bitvavo {
   public JSONObject updateOrder(final String market,final String orderId,final JSONObject body) {
     body.put("market", market);
     body.put("orderId", orderId);
+    body.put("operatorId", operatorId);
     return privateRequest("/order", "", "PUT", body);
   }
 
@@ -564,6 +574,7 @@ public class Bitvavo {
     final JSONObject options = new JSONObject();
     options.put("market", market);
     options.put("orderId", orderId);
+    options.put("operatorId", operatorId);
     final String postfix = createPostfix(options);
     return privateRequest("/order", postfix, "DELETE", new JSONObject());
   }
